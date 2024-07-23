@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ValidationError
+from datetime import datetime
 import requests
 
 app = FastAPI()
@@ -7,7 +8,7 @@ app = FastAPI()
 API_KEY = '205d7e01d7d5666bf92ee0f8522d5516'
 SPORT = 'upcoming'
 REGIONS = 'au'
-#MARKETS = 
+MARKETS = 'h2h'
 ODDS_FORMAT = 'decimal'
 DATE_FORMAT = 'iso'
 
@@ -19,6 +20,34 @@ class Sport(BaseModel):
     description: str
     active: bool
     has_outrights: bool
+
+class Odds(BaseModel):
+    name: str
+    price: float
+
+class Market(BaseModel):
+    key: str
+    last_update: datetime
+    outcomes: list[Odds]
+
+class Bookie(BaseModel):
+    key: str
+    title: str
+    last_update: datetime
+    markets: list[Market]
+
+
+
+class Bet(BaseModel):
+    id: str
+    sport_key: str
+    sport_title: str
+    commence_time: str
+    home_team: str
+    away_team: str
+    bookmakers: list[Bookie]
+
+
 
 @app.get("/")
 def root():
@@ -44,6 +73,26 @@ def get_sports() -> list[Sport]:
                 print("Validation Error:", e)
                 print("Item causing error", item)
     return sports
+
+@app.get("/get-odds-manual")
+def get_odds_manual(SPORT : str):
+    response = requests.get(f'https://api.the-odds-api.com/v4/sports/{SPORT}/odds/?apiKey={API_KEY}&regions={REGIONS}&markets={MARKETS}')
+    if(response.status_code != 200):
+        raise HTTPException(status_code=response.status_code, detail=response.text)
+    else:
+        bets_json = response.json()
+        print(bets_json)
+
+        bets = []
+        for bet in bets_json:
+            try:
+                bet = Bet(**bet)
+                bets.append(bet)
+            except ValidationError as e:
+                print("Validation Error:", e)
+                print("Item causing error", bet)
+    return bets
+
 
 
 @app.get("/get-odds")
